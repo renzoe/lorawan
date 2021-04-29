@@ -231,6 +231,13 @@ protected:
   TracedCallback<Ptr<Packet const> > m_sentNewPacket;
 
   /**
+   * Trace source that is fired when a packet arrives from the PHY layer
+   * and is for the node  (Non-promiscuous mode for Sniffer RX)
+   */
+  //TracedCallback<Ptr<const Packet>, double , uint8_t , double, int> m_receivedPacketRxSnifferTrace;
+  TracedCallback<Ptr<const Packet>> m_receivedPacketRxSnifferTrace;
+
+  /**
    * The PHY instance that sits under this MAC layer.
    */
   Ptr<LoraPhy> m_phy;

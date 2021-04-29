@@ -306,6 +306,19 @@ protected:
    */
   TracedCallback<Ptr<const Packet>, uint32_t> m_interferedPacket;
 
+  /**
+   * The trace source fired when a packet is sent and we are going to sniff the Tx packet .
+   *
+   * \see class CallBackTraceSource
+   */
+  TracedCallback<Ptr<const Packet>, double , uint8_t , double, int> m_sentPacketTxSnifferTrace;
+
+  /**
+   * Trace source that is fired when a packet is correctly received by the PHY layer
+   *   (Non-promiscuous mode for Sniffer RX)
+   */
+  TracedCallback<Ptr<const Packet>> m_receivedPacketRxSnifferTrace;
+
   // Callbacks
 
   /**

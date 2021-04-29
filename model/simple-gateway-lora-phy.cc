@@ -112,6 +112,9 @@ SimpleGatewayLoraPhy::Send (Ptr<Packet> packet, LoraTxParameters txParams, doubl
     {
       m_startSending (packet, 0);
     }
+
+  // Pcap Tracing [Renzo]
+  m_sentPacketTxSnifferTrace(packet, frequencyMHz, txParams.sf,  txPowerDbm, 0);
 }
 
 void
@@ -268,6 +271,8 @@ SimpleGatewayLoraPhy::EndReceive (Ptr<Packet> packet, Ptr<LoraInterferenceHelper
           m_successfullyReceivedPacket (packet, 0);
         }
 
+
+
       // Forward the packet to the upper layer
       if (!m_rxOkCallback.IsNull ())
         {
@@ -284,7 +289,15 @@ SimpleGatewayLoraPhy::EndReceive (Ptr<Packet> packet, Ptr<LoraInterferenceHelper
           packet->AddPacketTag (tag);
 
           m_rxOkCallback (packet);
+
+
+
+
         }
+
+      // Pcap Tracing [Renzo]
+      m_receivedPacketRxSnifferTrace(packet);// GetRxPowerdBm seems to fail for some, got possitive values
+
     }
 
   // Search for the demodulator that was locked on this event to free it.

@@ -80,6 +80,22 @@ public:
    */
   void FillHeader (LoraTag &tag);
 
+  uint8_t SetMPacketRssi() const {
+		return m_packet_rssi;
+  }
+
+  void SetMPacketRssi(uint8_t mPacketRssi) {
+	m_packet_rssi = mPacketRssi;
+  }
+
+  uint8_t GetMSnr() const {
+	return m_snr;
+  }
+
+  void SetMSnr(uint8_t mSnr) {
+	m_snr = mSnr;
+  }
+
   private:
   
   uint8_t m_lt_version; /* LoRatap header version */

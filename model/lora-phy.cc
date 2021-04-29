@@ -69,7 +69,17 @@ LoraPhy::GetTypeId (void)
                      "could not be correctly received because"
                      "its received power is below the sensitivity of the receiver",
                      MakeTraceSourceAccessor (&LoraPhy::m_underSensitivity),
-                     "ns3::Packet::TracedCallback");
+                     "ns3::Packet::TracedCallback")
+	 .AddTraceSource ("SnifferTx",
+			 	 	   "Trace source simulating a packet sniffer "
+			           "for packets sent over the medium",
+					  MakeTraceSourceAccessor (&LoraPhy::m_sentPacketTxSnifferTrace),
+					  "ns3::Packet::TracedCallback")
+	 .AddTraceSource ("SnifferRx",
+					   "Trace source simulating a packet sniffer "
+					   "for packets received over the medium",
+					  MakeTraceSourceAccessor (&LoraPhy::m_receivedPacketRxSnifferTrace),
+					  "ns3::Packet::TracedCallback");
   return tid;
 }
 

@@ -185,6 +185,9 @@ ClassAEndDeviceLorawanMac::Receive (Ptr<Packet const> packet)
 
           // Call the trace source
           m_receivedPacket (packet);
+
+          // Call the trace source for Pcap Sniffing
+          m_receivedPacketRxSnifferTrace(packet);
         }
       else
         {

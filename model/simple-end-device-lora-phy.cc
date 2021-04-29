@@ -79,6 +79,8 @@ SimpleEndDeviceLoraPhy::Send (Ptr<Packet> packet, LoraTxParameters txParams,
   tag.SetSpreadingFactor (txParams.sf);
   packet->AddPacketTag (tag);
 
+
+
   // Send the packet over the channel
   NS_LOG_INFO ("Sending the packet in the channel");
   m_channel->Send (this, packet, txPowerDbm, txParams, duration, frequencyMHz);
@@ -108,6 +110,23 @@ SimpleEndDeviceLoraPhy::Send (Ptr<Packet> packet, LoraTxParameters txParams,
     {
       m_startSending (packet, 0);
     }
+
+  // Renzo
+  //Also for the TxSniffer, and associated PHY metadata (Frequency, SF, and Power) (The LoraTag of the packet I could not make it work. And it is manglead by other functions)
+  //LoraTag tag;
+//  packet->RemovePacketTag (tag);
+//  tag.SetSpreadingFactor (txParams.sf);
+//  tag.SetFrequency(frequencyMHz);
+//  //txPowerDbm
+//  packet->AddPacketTag (tag);
+ // m_sentPacketTxSnifferTrace(packet);
+
+  m_sentPacketTxSnifferTrace(packet, frequencyMHz, txParams.sf,  txPowerDbm, 0);
+
+  //uint32_t m_frequency, /* LoRa frequency (Hz) */
+  //uint8_t m_sf, /* LoRa SF (sf_t) [7, 8, 9, 10, 11, 12] */
+  //uint8_t m_packet_rssi, /* LoRa packet RSSI,*/
+  //uint8_t m_snr /* LoRa SNR*/
 }
 
 void
@@ -306,6 +325,9 @@ SimpleEndDeviceLoraPhy::EndReceive (Ptr<Packet> packet,
         {
           m_rxOkCallback (packet);
         }
+
+      // Pcap Tracing [Renzo]
+      m_receivedPacketRxSnifferTrace(packet);// TODO: we might sniff traces that were destroyed by interference, we should add a CRC error or something...
 
     }
 }

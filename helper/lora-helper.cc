@@ -20,6 +20,7 @@
 
 #include "ns3/lora-helper.h"
 #include "ns3/log.h"
+#include "ns3/loratap-pcap-header.h"
 
 #include <fstream>
 
@@ -343,6 +344,78 @@ LoraHelper::DoPrintSimulationTime (Time interval)
   m_oldtime = std::time (0);
   Simulator::Schedule (interval, &LoraHelper::DoPrintSimulationTime, this, interval);
 }
+
+
+
+/*
+ *
+ * RENZO NOTES:
+ *
+ * We have to work on this PcapSniffLoRaTx and PcapSniffLoRaRx functions , maybe have only one. But Tx and Rx gives versatility.
+ * (we can refactor common code and still have two different functions.
+ *
+ *  Note: Also, I do not like this static functions, but maybe proper class functions. But when I tried to do that it raised some errors.
+ *  	I believe some "magic" is happening here to hook  the PcapFileWrapper with this functions without context...
+ *
+ *  Ideally I do not want all the metatada as input parameters,
+ *  As will be mentioned metadata should bet contained in a new Tag we have to define (NOT the LoraTag, because it does not have all we need )
+ *  (Wit out tag all the code will be much cleaner, and MAC layer will have PHY information)
+ *
+ *   TODO: create this new Tag made to contain the metadata needed for "LoratapPcapHeader", and populate in the trace sources of the devices.
+ * */
+/**
+ * @brief Write a packet in a PCAP file
+ * @param file the output file
+ * @param packet the packet
+ * @param (TODO: metadata from the packet)
+ */
+static void
+PcapSniffLoRaTx(
+		Ptr<PcapFileWrapper> file,
+		Ptr<const Packet> packet,
+		double m_frequency, /* LoRa frequency (Hz) */
+		uint8_t m_sf, /* LoRa SF (sf_t) [7, 8, 9, 10, 11, 12] */
+		double m_packet_rssi, /* LoRa packet RSSI,*/
+		int m_snr /* LoRa SNR*/
+		)
+{
+    Ptr<Packet> packetCopy = packet -> Copy ();
+
+    LoraTag packetLoRaTag; // We are missing Power and SNR information. --> Suggestion Define our own Packet Tag appropiate for LoraTapPcaHeader
+    LoratapPcapHeader loratapHeader;
+
+
+    packetCopy->RemovePacketTag(packetLoRaTag); // https://www.nsnam.org/docs/models/html/packets.html?highlight=packet
+    packetLoRaTag.SetFrequency(m_frequency);
+    packetLoRaTag.SetSpreadingFactor(m_sf);
+
+    loratapHeader.FillHeader (packetLoRaTag);
+    // This "FillHeader" is not enough because LoraTag does not have all the information, for not I manually set what is missing:
+    loratapHeader.SetMPacketRssi(unsigned(int(139.5 + m_packet_rssi))); //139.5 insted of 139 to approximate to nearest int);
+    loratapHeader.SetMSnr(m_snr);
+
+    packetCopy -> AddHeader (loratapHeader);
+	file->Write (Simulator::Now (), packetCopy);
+}
+
+
+static void
+PcapSniffLoRaRx(Ptr<PcapFileWrapper> file,	Ptr<const Packet> packet)
+{
+    Ptr<Packet> packetCopy = packet -> Copy ();
+
+    LoraTag packetLoRaTag; // We are missing Power and SNR information. --> Suggestion Define our own Packet Tag appropiate for LoraTapPcaHeader
+    LoratapPcapHeader loratapHeader;
+
+    packetCopy->RemovePacketTag(packetLoRaTag); // https://www.nsnam.org/docs/models/html/packets.html?highlight=packet
+    loratapHeader.FillHeader (packetLoRaTag);
+
+    // This "FillHeader" is not enough because LoraTag does not have all the information, for not I manually set what is missing:
+    packetCopy -> AddHeader (loratapHeader);
+	file->Write (Simulator::Now (), packetCopy);
+}
+
+
  
 void 
 LoraHelper::EnablePcapInternal (std::string prefix, Ptr<NetDevice> nd, bool promiscuous, bool explicitFilename)
@@ -359,6 +432,12 @@ LoraHelper::EnablePcapInternal (std::string prefix, Ptr<NetDevice> nd, bool prom
      return;
    }
 
+ Ptr<LoraPhy> phy = device->GetPhy();
+ NS_ABORT_MSG_IF (phy == 0, "LoraHelper::EnablePcapInternal(): Phy layer in LoraNetDevice must be set");
+ Ptr<LorawanMac> mac = device->GetMac();
+ NS_ABORT_MSG_IF (mac == 0, "LoraHelper::EnablePcapInternal(): Mac layer in LoraNetDevice must be set");
+
+
  PcapHelper pcapHelper;
 
  std::string filename;
@@ -369,14 +448,78 @@ LoraHelper::EnablePcapInternal (std::string prefix, Ptr<NetDevice> nd, bool prom
  else
    {
      filename = pcapHelper.GetFilenameFromDevice (prefix, device);
+     NS_LOG_INFO ("LoraHelper::EnablePcapInternal(): Prefix of fime: " << prefix << ".");
    }
-  
- device -> EnablePcapHeader ();
- 
+
  Ptr<PcapFileWrapper> file = pcapHelper.CreateFile (filename, std::ios::out, 
                                                     PcapHelper::DLT_LORATAP);
- pcapHelper.HookDefaultSink<LoraNetDevice> (device, "PromiscSniffer", file);
+
+
+ //pcapHelper.HookDefaultSink<LoraNetDevice> (device, "PromiscSniffer", file); // Old first approach. This works for GWs for TX for sure, for RX (? did not check). For ED did not worked.
+
+ /* Examples how they feed/hook the pcapFile from other modules helpers:
+  *		 device->GetMac ()->TraceConnectWithoutContext ("PromiscSniffer", MakeBoundCallback (&PcapSniffLrWpan, file)); // https://gitlab.com/nsnam/ns-3-dev/-/blob/master/src/lr-wpan/helper/lr-wpan-helper.cc#L319
+  *		 This approach I believe is better to not do a static function call:
+  *		 phy->TraceConnectWithoutContext ("MonitorSnifferTx", MakeBoundCallback (&WifiPhyHelper::PcapSniffTxEvent, file)); //https://gitlab.com/nsnam/ns-3-dev/-/blob/master/src/wifi/helper/wifi-helper.cc#L612
+  *		 phy->TraceConnectWithoutContext ("MonitorSnifferRx", MakeBoundCallback (&WifiPhyHelper::PcapSniffRxEvent, file));
+ */
+
+
+
+ /* ********************************************
+  * 				TX Sniff
+  * ********************************************
+  *
+  * A Sent packet is captured at PHY layer. (At MAC layer we can not guarantee the TX; e.g., PHY might not send).
+  * Involved Classes:
+  *    * [ALL]	LoraPhy --> ("SnifferTx" Trace Source)
+  *    * [ED] 	SimpleEndDeviceLoraPhy::Send
+  *    * [GW] 	SimpleGatewayLoraPhy::Send (TODO test)
+  *    * [NS] 	TODO
+  *
+  * */
+  phy->TraceConnectWithoutContext ("SnifferTx", MakeBoundCallback (&PcapSniffLoRaTx, file));
+  // Comment, currently PcapSniffLoRaTx has a lot of additional parameters. We should define our custom packet Tag to simplify.
+
+
+  /*********************************************
+  * 				RX Sniff
+  * ********************************************
+  * Received Packet sniffing strategy depends on promiscuous mode activated or not
+  * */
+
+ if (promiscuous == true)
+    {
+	  /*
+	   * Involved classes:
+	   * 	* [ALL]	LoraPhy --> ("SnifferRx" Trace Source)
+	   * 	* [ED] 	SimpleEndDeviceLoraPhy::EndReceive (TODO test --have not tested--)
+	   * 	* [GW] 	SimpleGatewayLoraPhy::EndReceive  (Test STATUS: Some issues with Packet RSSI dBm, no SNR yet )
+	   * 	* [NS] 	TODO
+	   *
+	   */
+	 phy->TraceConnectWithoutContext ("SnifferRx", MakeBoundCallback (&PcapSniffLoRaRx, file));
+  }
+  else
+  { // non-promiscuous. Has to be done at MAC layer (At PHY we do not have the notion of unicast)
+
+	  /*
+	   * Involved classes:
+	   * 	* [ALL]	LorawanMac --> ("SnifferRx" Trace Source)
+	   * 	* [ED] 	ClassAEndDeviceLorawanMac::Receive (TODO test --have not tested--)
+	   * 	* [GW] 	GatewayLorawanMac::Receive (Test STATUS: Some issues with Packet RSSI dBm, no SNR yet )
+	   * 	* [NS] 	TODO
+	   *
+	   * TODO: currently a Packet at MAC does not have the PHY metadata (or if it has it, is by mere chance/luck in the LoRaTag),
+	   * 	 we have to define our own Tag to contain this metadata explicitly.
+	   */
+	  mac->TraceConnectWithoutContext ("SnifferRx", MakeBoundCallback (&PcapSniffLoRaRx, file));
+
+  }
+
 }
+
+
 
 }
 }

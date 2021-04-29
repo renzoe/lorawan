@@ -133,6 +133,8 @@ GatewayLorawanMac::Receive (Ptr<Packet const> packet)
     {
       NS_LOG_DEBUG ("Not forwarding downlink message to NetDevice");
     }
+  // Call the trace source for Pcap Sniffing
+  m_receivedPacketRxSnifferTrace(packet);
 }
 
 void

@@ -48,7 +48,12 @@ LorawanMac::GetTypeId (void)
                      "Trace source indicating a packet "
                      "could not be sent immediately because of duty cycle limitations",
                      MakeTraceSourceAccessor (&LorawanMac::m_cannotSendBecauseDutyCycle),
-                     "ns3::Packet::TracedCallback");
+                     "ns3::Packet::TracedCallback")
+	.AddTraceSource ("SnifferRx",
+                   "Trace source simulating a non-promiscuous packet sniffer "
+                   "for received packets attached to the device",
+                   MakeTraceSourceAccessor (&LorawanMac::m_receivedPacketRxSnifferTrace),
+                   "ns3::Packet::TracedCallback");
   return tid;
 }
 
